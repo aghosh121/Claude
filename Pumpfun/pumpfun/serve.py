@@ -28,6 +28,25 @@ from .data import DataConnector, DataStorage
 from .config import config
 
 
+def to_native(x):
+    """Convert numpy/pandas types to Python native types for JSON serialization."""
+    if isinstance(x, (np.integer,)):
+        return int(x)
+    if isinstance(x, (np.floating,)):
+        return float(x)
+    if isinstance(x, np.ndarray):
+        return x.tolist()
+    if isinstance(x, pd.Series):
+        return x.to_dict()
+    if isinstance(x, pd.DataFrame):
+        return x.to_dict(orient="records")
+    if isinstance(x, dict):
+        return {k: to_native(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [to_native(v) for v in x]
+    return x
+
+
 class TokenRequest(BaseModel):
     """Request model for token ranking."""
     token_addresses: List[str] = Field(..., description="List of token addresses to rank")
@@ -70,9 +89,12 @@ class RankingService:
         )
         
         # Initialize components
-        self.feature_store = FeatureStore(config)
+        # FeatureStore doesn't need config parameter
+        self.feature_store = FeatureStore()
+        # DataConnector and DataStorage expect config_dict
         self.data_connector = DataConnector(config)
         self.data_storage = DataStorage(config)
+        # TokenRankingModel expects config
         self.ranking_model = TokenRankingModel(config)
         
         # Service state
@@ -113,10 +135,11 @@ class RankingService:
             """Health check endpoint."""
             return await self._get_health_status()
             
-        @self.app.post("/rank", response_model=List[TokenResponse])
+        @self.app.post("/rank")
         async def rank_tokens(request: TokenRequest):
             """Rank tokens and return predictions."""
-            return await self._rank_tokens(request)
+            result = await self._rank_tokens(request)
+            return JSONResponse(content=to_native(result))
             
         @self.app.get("/models", response_model=Dict[str, Any])
         async def list_models():
@@ -145,53 +168,110 @@ class RankingService:
             return {"message": "Data refresh started in background"}
             
     async def _rank_tokens(self, request: TokenRequest) -> List[TokenResponse]:
-        """Rank tokens and return predictions."""
-        start_time = time.time()
-        self.request_count += 1
-        
+        """Rank tokens based on their features and model predictions."""
         try:
             logger.info(f"Processing ranking request for {len(request.token_addresses)} tokens")
             
-            # Validate token addresses
-            if not request.token_addresses:
-                raise HTTPException(status_code=400, detail="No token addresses provided")
+            # Add timeout to prevent hanging on external API calls
+            import asyncio
+            try:
+                # Set a 10-second timeout for the entire ranking operation
+                result = await asyncio.wait_for(
+                    self._process_ranking_request(request), 
+                    timeout=10.0
+                )
+                return result
+            except asyncio.TimeoutError:
+                logger.error("Ranking request timed out after 10 seconds")
+                raise HTTPException(
+                    status_code=408, 
+                    detail="Ranking request timed out. This may be due to slow external API responses or VPN routing issues."
+                )
                 
-            # Get features for tokens
-            features_df = await self._get_features_for_tokens(request.token_addresses)
-            
-            if features_df.empty:
-                raise HTTPException(status_code=404, detail="No features found for provided tokens")
-                
-            # Make predictions
-            predictions = self.ranking_model.predict(
-                features_df, 
-                model_name=request.model_name
-            )
-            
-            # Build responses
-            responses = []
-            for i, token_address in enumerate(request.token_addresses):
-                if token_address in features_df.index:
-                    response = await self._build_token_response(
-                        token_address=token_address,
-                        features=features_df.loc[token_address] if request.include_features else None,
-                        predictions=predictions,
-                        model_name=request.model_name,
-                        include_confidence=request.include_confidence,
-                        include_shap=request.include_shap
-                    )
-                    responses.append(response)
-                    
-            # Log performance
-            processing_time = time.time() - start_time
-            logger.info(f"Ranking completed in {processing_time:.3f}s for {len(responses)} tokens")
-            
-            return responses
-            
+        except HTTPException:
+            raise
         except Exception as e:
-            self.error_count += 1
-            logger.error(f"Error in token ranking: {str(e)}")
+            logger.error(f"Error in token ranking: {e}")
             raise HTTPException(status_code=500, detail=f"Ranking failed: {str(e)}")
+    
+    async def _process_ranking_request(self, request: TokenRequest) -> List[TokenResponse]:
+        """Process the actual ranking request."""
+        # Get features for tokens
+        features = await self._get_features_for_tokens(request.token_addresses)
+        
+        if features.empty:
+            raise HTTPException(status_code=404, detail="No features found for provided tokens")
+        
+        # Make predictions using the ranking model
+        predictions = {}
+        for model_name in self.ranking_model.models.keys():
+            try:
+                # Prepare features for prediction - only include columns the model was trained on
+                # Get the feature names from the model metadata
+                model_feature_names = self.ranking_model.feature_names
+                if model_feature_names:
+                    # Filter features to only include columns the model knows about
+                    available_features = [col for col in model_feature_names if col in features.columns]
+                    if available_features:
+                        X = features[available_features].fillna(0)
+                        logger.info(f"Using {len(available_features)} features for prediction (filtered from {len(features.columns)} total)")
+                    else:
+                        logger.warning(f"No matching features found for model {model_name}")
+                        continue
+                else:
+                    # Fallback: exclude obvious non-feature columns
+                    feature_cols = [col for col in features.columns if col not in ['token_address', 'token_id', 'timestamp']]
+                    X = features[feature_cols].fillna(0)
+                    logger.info(f"Using fallback feature selection: {len(feature_cols)} features")
+                
+                # Ensure we have data to predict on - fix DataFrame boolean logic
+                if X.empty:
+                    logger.warning(f"No valid features for prediction with model {model_name}")
+                    continue
+                
+                if len(X) == 0:
+                    logger.warning(f"Empty feature matrix for model {model_name}")
+                    continue
+                
+                # Make prediction
+                pred_dict = self.ranking_model.predict(X, model_name)
+                
+                # Extract the prediction array from the dictionary
+                if pred_dict and model_name in pred_dict:
+                    pred_array = pred_dict[model_name]
+                    if pred_array is not None and len(pred_array) > 0:
+                        predictions[model_name] = pred_array
+                        logger.info(f"Successfully generated predictions with model {model_name}")
+                    else:
+                        logger.warning(f"Model {model_name} returned empty predictions")
+                else:
+                    logger.warning(f"Model {model_name} not found in prediction results")
+                
+            except Exception as e:
+                logger.error(f"Failed to make prediction with model {model_name}: {e}")
+                continue
+        
+        if not predictions:
+            raise HTTPException(status_code=500, detail="Failed to generate predictions with any model")
+        
+        # Build responses
+        responses = []
+        for token_address in request.token_addresses:
+            # Filter features for this specific token
+            token_features = features[features['token_address'] == token_address]
+            if not token_features.empty:
+                token_features_series = token_features.iloc[0]
+                response = await self._build_token_response(
+                    token_address, 
+                    token_features_series, 
+                    predictions, 
+                    request.model_name,
+                    request.include_confidence, 
+                    request.include_shap
+                )
+                responses.append(response)
+        
+        return responses
             
     async def _get_features_for_tokens(self, token_addresses: List[str]) -> pd.DataFrame:
         """Get features for the specified tokens."""
@@ -229,7 +309,28 @@ class RankingService:
             # Use first available model
             model_key = list(predictions.keys())[0]
             
-        ranking_score = float(predictions[model_key][0])
+        # Handle different prediction result types
+        pred_result = predictions[model_key]
+        
+        # Extract the ranking score based on the type of pred_result
+        if isinstance(pred_result, np.ndarray):
+            if pred_result.size == 1:
+                # Single value array
+                ranking_score = float(pred_result.item())
+            elif len(pred_result) > 0:
+                # Multiple values, take the first one
+                ranking_score = float(pred_result[0])
+            else:
+                raise ValueError(f"Empty prediction result from model {model_key}")
+        elif isinstance(pred_result, (list, tuple)):
+            if len(pred_result) > 0:
+                ranking_score = float(pred_result[0])
+            else:
+                raise ValueError(f"Empty prediction result from model {model_key}")
+        elif isinstance(pred_result, (int, float)):
+            ranking_score = float(pred_result)
+        else:
+            raise ValueError(f"Unexpected prediction result type: {type(pred_result)} from model {model_key}")
         
         # Build response
         response = TokenResponse(
@@ -509,9 +610,20 @@ class ModelServer:
 def create_ranking_service(config: Dict[str, Any] = None) -> RankingService:
     """Create a new ranking service instance."""
     if config is None:
-        config = config.dict() if hasattr(config, 'dict') else {}
+        try:
+            # Try to get config from the imported config module
+            if hasattr(config, 'dict'):
+                config_dict = config.dict()
+            elif hasattr(config, 'model_dump'):
+                config_dict = config.model_dump()
+            else:
+                config_dict = {}
+        except Exception:
+            config_dict = {}
+    else:
+        config_dict = config
         
-    return RankingService(config)
+    return RankingService(config_dict)
 
 
 # CLI entry point
@@ -526,12 +638,24 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # Load configuration
-    if args.config:
-        # Load from file
-        pass
-    else:
-        # Use default config
-        service_config = config.dict()
+    try:
+        if args.config:
+            # Load from file - implement file loading logic here
+            service_config = {}
+        else:
+            # Use default config
+            try:
+                if hasattr(config, 'dict'):
+                    service_config = config.dict()
+                elif hasattr(config, 'model_dump'):
+                    service_config = config.model_dump()
+                else:
+                    service_config = {}
+            except Exception:
+                service_config = {}
+    except Exception as e:
+        print(f"Error loading configuration: {e}")
+        service_config = {}
         
     # Create and start service
     service = create_ranking_service(service_config)

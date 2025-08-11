@@ -23,6 +23,11 @@ class DataConfig(BaseSettings):
     max_snapshot_age_hours: int = Field(default=168, description="Maximum snapshot age in hours")
     snapshot_interval_minutes: int = Field(default=15, description="Snapshot interval in minutes")
     
+    # API settings
+    pumpfun_api_enabled: bool = Field(default=True, description="Enable Pump.fun API integration")
+    pumpfun_api_url: str = Field(default="https://api.pump.fun", description="Pump.fun API base URL")
+    disable_ssl_verify: bool = Field(default=False, description="Disable SSL verification (development only)")
+    
     # Feature computation windows
     feature_windows: List[int] = Field(default=[1, 5, 15, 60], description="Feature windows in minutes")
     

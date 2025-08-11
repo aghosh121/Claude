@@ -37,7 +37,7 @@ class BaseFeatureEngineer(ABC):
             return False
         return True
     
-    def _handle_missing_values(self, data: pd.DataFrame, strategy: str = 'drop') -> pd.DataFrame:
+    def _handle_missing_values(self, data: pd.DataFrame, strategy: str = 'fill_zero') -> pd.DataFrame:
         """Handle missing values in the data."""
         if strategy == 'drop':
             return data.dropna()
@@ -54,8 +54,22 @@ class ChainFlowEngineer(BaseFeatureEngineer):
     
     def __init__(self):
         super().__init__()
-        self.windows = config.feature.chain_flow_windows
-        self.holder_buckets = config.feature.holder_concentration_buckets
+        # Safely access config values with fallbacks
+        try:
+            if hasattr(config, 'feature') and hasattr(config.feature, 'chain_flow_windows'):
+                self.windows = config.feature.chain_flow_windows
+            else:
+                self.windows = [1, 5, 15, 60]  # Default windows
+        except Exception:
+            self.windows = [1, 5, 15, 60]  # Default windows
+            
+        try:
+            if hasattr(config, 'feature') and hasattr(config.feature, 'holder_concentration_buckets'):
+                self.holder_buckets = config.feature.holder_concentration_buckets
+            else:
+                self.holder_buckets = [0.1, 0.25, 0.5, 0.75, 0.9]  # Default buckets
+        except Exception:
+            self.holder_buckets = [0.1, 0.25, 0.5, 0.75, 0.9]  # Default buckets
     
     def compute_features(self, data: pd.DataFrame, token_id: str, timestamp: datetime) -> pd.DataFrame:
         """Compute chain flow features."""
@@ -162,8 +176,22 @@ class WalletQualityEngineer(BaseFeatureEngineer):
     
     def __init__(self):
         super().__init__()
-        self.lookback_days = config.feature.wallet_quality_lookback_days
-        self.bot_threshold = config.feature.bot_detection_threshold
+        # Safely access config values with fallbacks
+        try:
+            if hasattr(config, 'feature') and hasattr(config.feature, 'wallet_quality_lookback_days'):
+                self.lookback_days = config.feature.wallet_quality_lookback_days
+            else:
+                self.lookback_days = 30  # Default lookback
+        except Exception:
+            self.lookback_days = 30  # Default lookback
+            
+        try:
+            if hasattr(config, 'feature') and hasattr(config.feature, 'bot_detection_threshold'):
+                self.bot_threshold = config.feature.bot_detection_threshold
+            else:
+                self.bot_threshold = 0.7  # Default threshold
+        except Exception:
+            self.bot_threshold = 0.7  # Default threshold
     
     def compute_features(self, data: pd.DataFrame, token_id: str, timestamp: datetime) -> pd.DataFrame:
         """Compute wallet quality features."""
@@ -258,8 +286,22 @@ class SocialEngineer(BaseFeatureEngineer):
     
     def __init__(self):
         super().__init__()
-        self.platforms = config.feature.social_platforms
-        self.sentiment_lookback = config.feature.sentiment_lookback_hours
+        # Safely access config values with fallbacks
+        try:
+            if hasattr(config, 'feature') and hasattr(config.feature, 'social_platforms'):
+                self.platforms = config.feature.social_platforms
+            else:
+                self.platforms = ["twitter", "telegram", "discord"]  # Default platforms
+        except Exception:
+            self.platforms = ["twitter", "telegram", "discord"]  # Default platforms
+            
+        try:
+            if hasattr(config, 'feature') and hasattr(config.feature, 'sentiment_lookback_hours'):
+                self.sentiment_lookback = config.feature.sentiment_lookback_hours
+            else:
+                self.sentiment_lookback = 24  # Default lookback
+        except Exception:
+            self.sentiment_lookback = 24  # Default lookback
     
     def compute_features(self, data: pd.DataFrame, token_id: str, timestamp: datetime) -> pd.DataFrame:
         """Compute social media features."""
@@ -364,8 +406,22 @@ class ContentEngineer(BaseFeatureEngineer):
     
     def __init__(self):
         super().__init__()
-        self.max_length = config.feature.content_max_length
-        self.embedding_model = config.feature.nlp_embedding_model
+        # Safely access config values with fallbacks
+        try:
+            if hasattr(config, 'feature') and hasattr(config.feature, 'content_max_length'):
+                self.max_length = config.feature.content_max_length
+            else:
+                self.max_length = 1000  # Default max length
+        except Exception:
+            self.max_length = 1000  # Default max length
+            
+        try:
+            if hasattr(config, 'feature') and hasattr(config.feature, 'nlp_embedding_model'):
+                self.embedding_model = config.feature.nlp_embedding_model
+            else:
+                self.embedding_model = "all-MiniLM-L6-v2"  # Default model
+        except Exception:
+            self.embedding_model = "all-MiniLM-L6-v2"  # Default model
     
     def compute_features(self, data: pd.DataFrame, token_id: str, timestamp: datetime) -> pd.DataFrame:
         """Compute content and NLP features."""
@@ -567,8 +623,22 @@ class ImageEngineer(BaseFeatureEngineer):
     
     def __init__(self):
         super().__init__()
-        self.max_size = config.feature.image_max_size
-        self.embedding_model = config.feature.image_embedding_model
+        # Safely access config values with fallbacks
+        try:
+            if hasattr(config, 'feature') and hasattr(config.feature, 'image_max_size'):
+                self.max_size = config.feature.image_max_size
+            else:
+                self.max_size = 512  # Default max size
+        except Exception:
+            self.max_size = 512  # Default max size
+            
+        try:
+            if hasattr(config, 'feature') and hasattr(config.feature, 'image_embedding_model'):
+                self.embedding_model = config.feature.image_embedding_model
+            else:
+                self.embedding_model = "clip-vit-base-patch32"  # Default model
+        except Exception:
+            self.embedding_model = "clip-vit-base-patch32"  # Default model
     
     def compute_features(self, data: pd.DataFrame, token_id: str, timestamp: datetime) -> pd.DataFrame:
         """Compute image and media features."""

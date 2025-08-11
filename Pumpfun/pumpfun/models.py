@@ -517,6 +517,11 @@ class TokenRankingModel:
         self.model_performance = {}
         self.feature_names = None
         
+        # Auto-load models if models directory exists
+        models_dir = Path(config.get('model_registry_dir', 'models'))
+        if models_dir.exists():
+            self.load_models(models_dir)
+            
     def create_model(self, model_name: str, model_type: str, **kwargs) -> BaseModel:
         """Create a new model instance."""
         if model_type == "glm":
@@ -560,36 +565,60 @@ class TokenRankingModel:
         """Evaluate a trained model."""
         model = self.models[model_name]
         
-        # Cross-validation
-        tscv = TimeSeriesSplit(n_splits=5)
+        # Adaptive cross-validation based on sample size
+        n_samples = len(X)
+        if n_samples < 3:
+            # Too few samples for cross-validation
+            logger.warning(f"Too few samples ({n_samples}) for cross-validation. Skipping evaluation.")
+            self.model_performance[model_name] = {
+                'cv_mean': np.nan,
+                'cv_std': np.nan,
+                'cv_scores': [],
+                'note': 'Insufficient samples for cross-validation'
+            }
+            return
+        
+        # Use fewer splits for small datasets
+        n_splits = min(3, n_samples - 1)  # At most 3 splits, and ensure we have enough samples
+        tscv = TimeSeriesSplit(n_splits=n_splits)
         cv_scores = []
         
-        for train_idx, val_idx in tscv.split(X):
-            X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
-            y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
-            
-            # Retrain on this fold
-            temp_model = self.create_model(model_name, model.model_type)
-            temp_model.fit(X_train, y_train)
-            
-            # Predict and score
-            pred = temp_model.predict(X_val)
-            
-            if hasattr(y_val, 'dtype') and np.issubdtype(y_val.dtype, np.number):
-                score = r2_score(y_val, pred)
-            else:
-                score = roc_auc_score(y_val, pred)
+        try:
+            for train_idx, val_idx in tscv.split(X):
+                X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
+                y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
                 
-            cv_scores.append(score)
+                # Retrain on this fold
+                temp_model = self.create_model(model_name, model.model_type)
+                temp_model.fit(X_train, y_train)
+                
+                # Predict and score
+                pred = temp_model.predict(X_val)
+                
+                if hasattr(y_val, 'dtype') and np.issubdtype(y_val.dtype, np.number):
+                    score = r2_score(y_val, pred)
+                else:
+                    score = roc_auc_score(y_val, pred)
+                    
+                cv_scores.append(score)
+                
+            # Store performance metrics
+            self.model_performance[model_name] = {
+                'cv_mean': np.mean(cv_scores),
+                'cv_std': np.std(cv_scores),
+                'cv_scores': cv_scores
+            }
             
-        # Store performance metrics
-        self.model_performance[model_name] = {
-            'cv_mean': np.mean(cv_scores),
-            'cv_std': np.std(cv_scores),
-            'cv_scores': cv_scores
-        }
-        
-        logger.info(f"Model {model_name} - CV Score: {np.mean(cv_scores):.4f} ± {np.std(cv_scores):.4f}")
+            logger.info(f"Model {model_name} - CV Score: {np.mean(cv_scores):.4f} ± {np.std(cv_scores):.4f}")
+            
+        except Exception as e:
+            logger.warning(f"Cross-validation failed: {e}. Skipping evaluation.")
+            self.model_performance[model_name] = {
+                'cv_mean': np.nan,
+                'cv_std': np.nan,
+                'cv_scores': [],
+                'note': f'Cross-validation failed: {str(e)}'
+            }
         
     def predict(self, X: pd.DataFrame, model_name: Optional[str] = None) -> Dict[str, np.ndarray]:
         """Make predictions using trained models."""
@@ -651,22 +680,49 @@ class TokenRankingModel:
         """Load trained models from disk."""
         # Load metadata
         metadata_path = load_dir / "metadata.json"
-        with open(metadata_path, 'r') as f:
-            metadata = json.load(f)
-            
-        self.model_performance = metadata['model_performance']
-        self.feature_names = metadata['feature_names']
+        if metadata_path.exists():
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+                
+            self.model_performance = metadata['model_performance']
+            self.feature_names = metadata['feature_names']
         
         # Load models
         for model_file in load_dir.glob("*.pkl"):
             if model_file.name == "metadata.json":
                 continue
                 
-            model_name = model_file.stem
-            model = BaseModel("temp", "temp")  # Placeholder
-            model.load(model_file)
-            
-            self.models[model_name] = model
+            try:
+                model_name = model_file.stem
+                
+                # Load the model data to determine its type
+                with open(model_file, 'rb') as f:
+                    model_data = pickle.load(f)
+                
+                # Create appropriate model instance based on the loaded data
+                model_type = model_data.get('model_type', 'unknown')
+                if model_type == 'glm':
+                    model = GLMModel(model_name)
+                elif model_type == 'xgboost':
+                    model = XGBoostModel(model_name)
+                elif model_type == 'lightgbm':
+                    model = LightGBMModel(model_name)
+                elif model_type == 'catboost':
+                    model = CatBoostModel(model_name)
+                elif model_type == 'ensemble':
+                    model = EnsembleModel(model_name, [])
+                else:
+                    # Fallback: try to determine type from filename or create generic
+                    logger.warning(f"Unknown model type for {model_name}, creating generic model")
+                    model = BaseModel(model_name, "generic")
+                
+                # Load the actual model data
+                model.load(model_file)
+                self.models[model_name] = model
+                
+            except Exception as e:
+                logger.error(f"Failed to load model {model_file}: {e}")
+                continue
             
         logger.info(f"Loaded {len(self.models)} models from {load_dir}")
 

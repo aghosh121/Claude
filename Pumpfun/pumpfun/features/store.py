@@ -52,7 +52,20 @@ class FeatureStore:
     """Manages feature computation, storage, and retrieval."""
     
     def __init__(self, base_dir: Optional[Path] = None):
-        self.base_dir = base_dir or config.data.features_dir
+        # Handle config access more safely
+        try:
+            if base_dir is None:
+                if hasattr(config, 'data') and hasattr(config.data, 'features_dir'):
+                    self.base_dir = config.data.features_dir
+                else:
+                    # Fallback to default path
+                    self.base_dir = Path("data/features")
+            else:
+                self.base_dir = base_dir
+        except Exception:
+            # Fallback to default path if config access fails
+            self.base_dir = Path("data/features")
+            
         self.base_dir.mkdir(parents=True, exist_ok=True)
         
         # Initialize feature engineers
@@ -119,7 +132,21 @@ class FeatureStore:
             data_sources = []
             
             for family_name, engineer in self.engineers.items():
-                if family_name in config.feature.feature_families:
+                # Safely check if this feature family is enabled
+                try:
+                    if hasattr(config, 'feature') and hasattr(config.feature, 'feature_families'):
+                        if family_name in config.feature.feature_families:
+                            enabled = True
+                        else:
+                            enabled = False
+                    else:
+                        # If config doesn't have feature families, enable all by default
+                        enabled = True
+                except Exception:
+                    # If config access fails, enable all by default
+                    enabled = True
+                
+                if enabled:
                     try:
                         self.logger.info(f"Computing {family_name} features for {token_id}")
                         
@@ -178,6 +205,62 @@ class FeatureStore:
         except Exception as e:
             self.logger.error(f"Failed to compute features for {token_id}: {e}")
             raise
+    
+    async def compute_features_batch(
+        self,
+        data: pd.DataFrame
+    ) -> pd.DataFrame:
+        """Compute features for multiple tokens in batch.
+        
+        Args:
+            data: DataFrame with columns: timestamp, token_address, token_id, price, volume_24h, etc.
+                
+        Returns:
+            DataFrame with computed features for all tokens
+        """
+        if data.empty:
+            raise ValueError("No data provided for feature computation")
+        
+        self.logger.info(f"Computing features for {len(data)} data points")
+        
+        # Instead of grouping by token_id, process all data points together
+        # This will produce one feature row per input data row
+        all_features = []
+        
+        for idx, row in data.iterrows():
+            try:
+                # Create a single-row DataFrame for this data point
+                single_data = pd.DataFrame([row])
+                
+                # Prepare data in the expected format
+                token_data_dict = {
+                    'pumpfun': single_data,  # Use pumpfun as the main data source
+                    'solana': single_data,   # Use same data for solana features
+                    'social': pd.DataFrame()  # Empty for now
+                }
+                
+                # Compute features for this data point
+                features, metadata = self.compute_features(
+                    token_data_dict, 
+                    row['token_id'], 
+                    row['timestamp']
+                )
+                
+                # Add the features to our list
+                all_features.append(features)
+                
+            except Exception as e:
+                self.logger.warning(f"Failed to compute features for data point {idx}: {e}")
+                continue
+        
+        if not all_features:
+            raise ValueError("No features were computed successfully")
+        
+        # Combine all features
+        combined_features = pd.concat(all_features, ignore_index=True)
+        
+        self.logger.info(f"Successfully computed features for {len(combined_features)} samples")
+        return combined_features
     
     def _get_family_data(self, family_name: str, token_data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
         """Get relevant data for a specific feature family."""
@@ -301,6 +384,52 @@ class FeatureStore:
     def get_all_tokens(self) -> List[str]:
         """Get list of all tokens with features."""
         return list(self.feature_metadata.keys())
+    
+    async def get_features_batch(self, token_addresses: List[str]) -> pd.DataFrame:
+        """Get features for multiple tokens in batch."""
+        all_features = []
+        
+        # First try to load from existing feature files
+        for token_address in token_addresses:
+            features = self.load_features(token_address)
+            if features is not None:
+                # Add token_address column if not present
+                if 'token_address' not in features.columns:
+                    features = features.copy()
+                    features['token_address'] = token_address
+                all_features.append(features)
+        
+        # If no features found by individual token, try to load from the pumpfun directory
+        if not all_features:
+            pumpfun_dir = self.base_dir / "pumpfun"
+            if pumpfun_dir.exists():
+                # Look for feature files in the pumpfun directory
+                for feature_file in pumpfun_dir.glob("features_*.parquet"):
+                    try:
+                        features_df = pd.read_parquet(feature_file)
+                        # Filter for the requested tokens
+                        if 'token_id' in features_df.columns:
+                            # Filter by token_id
+                            filtered_features = features_df[features_df['token_id'].isin(token_addresses)].copy()
+                            if not filtered_features.empty:
+                                # Add token_address column for consistency
+                                filtered_features['token_address'] = filtered_features['token_id']
+                                all_features.append(filtered_features)
+                        elif 'token_address' in features_df.columns:
+                            # Filter by token_address
+                            filtered_features = features_df[features_df['token_address'].isin(token_addresses)].copy()
+                            if not filtered_features.empty:
+                                all_features.append(filtered_features)
+                    except Exception as e:
+                        self.logger.error(f"Failed to load features from {feature_file}: {e}")
+                        continue
+        
+        if not all_features:
+            return pd.DataFrame()
+        
+        # Combine all features
+        combined_features = pd.concat(all_features, ignore_index=True)
+        return combined_features
     
     def cleanup_old_features(self, max_age_hours: int = 168):
         """Clean up old feature files."""
