@@ -1,332 +1,252 @@
-# 🚀 Pump.fun Token Ranking System
+# 🚀 Solana New Tokens Dashboard - Version 1.0
 
-A comprehensive AI-powered token ranking and prediction system for the Pump.fun ecosystem. This system combines advanced machine learning, real-time data processing, and sophisticated feature engineering to provide accurate token rankings and predictions.
+A real-time dashboard for tracking newly created and small market cap Solana tokens. Built with HTML, CSS, and JavaScript, this dashboard provides live data from CoinGecko API to help you discover fresh opportunities in the Solana ecosystem.
 
 ## ✨ Features
 
-- **Multi-Source Data Ingestion**: Solana blockchain, Pump.fun API, social media, and content analysis
-- **Advanced Feature Engineering**: 6 feature families with 100+ engineered features
-- **Multiple ML Models**: GLMs, XGBoost, LightGBM, CatBoost, and ensemble methods
-- **Real-Time Serving**: FastAPI-based REST API for live predictions
-- **Comprehensive Evaluation**: Cross-validation, hyperparameter tuning, and performance analysis
-- **Automated Data Pipeline**: Snapshotting, storage, and feature computation
-- **CLI Interface**: Command-line tools for all system operations
+### 🆕 New Token Discovery
+- **Real-time Solana token data** from CoinGecko API
+- **Small market cap focus** (under $100M) for newer tokens
+- **Volume filtering** to ensure active trading
+- **Creation date tracking** when available
 
-## 🏗️ Architecture
+### 📊 Comprehensive Token Information
+- **Market data**: Price, market cap, volume, supply
+- **Price performance**: 24h and 7d changes
+- **Token details**: Name, symbol, image, rank
+- **Creation information**: Genesis date and age
 
+### 🎨 Modern UI/UX
+- **Responsive design** that works on all devices
+- **Real-time status updates** with color-coded indicators
+- **Interactive charts** showing token age distribution
+- **Smart filtering** and search capabilities
+
+### 🔍 Advanced Features
+- **Multiple data sources** with fallback options
+- **Error handling** with user-friendly messages
+- **Console logging** for debugging and transparency
+- **Sample data fallback** when APIs are unavailable
+
+## 🛠️ Technology Stack
+
+- **Frontend**: HTML5, CSS3, JavaScript (ES6+)
+- **Charts**: Chart.js for data visualization
+- **APIs**: CoinGecko API for cryptocurrency data
+- **Styling**: Custom CSS with modern gradients and animations
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Modern web browser (Chrome, Firefox, Safari, Edge)
+- Internet connection for API access
+
+### Installation
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/aghosh121/pumpfun.git
+   cd pumpfun
+   ```
+
+2. **Choose your dashboard**
+   
+   **🆕 NEW: Advanced GeckoTerminal Dashboard (Recommended)**
+   ```bash
+   # Start local server
+   python3 -m http.server 8001
+   # Open: http://localhost:8001/geckoterminal_scraper_dashboard_working.html
+   ```
+   
+   **Classic CoinGecko Dashboard**
+   ```bash
+   # Option 1: Double-click the HTML file
+   open real_solana_tokens_dashboard.html
+   
+   # Option 2: Use a local server
+   python3 -m http.server 8000
+   # Then open http://localhost:8000 in your browser
+   ```
+
+3. **Start using the dashboard**
+   - Click "Fetch Latest Pools" to get live data
+   - Use sorting and filtering options
+   - View top scorers and investment opportunities
+
+## 🆕 NEW: Advanced GeckoTerminal Dashboard
+
+### 🏆 Top Features
+- **Real-time Solana pool data** from GeckoTerminal API
+- **Comprehensive scoring system** (0-100 points) based on:
+  - Liquidity (25 points)
+  - Volume (25 points) 
+  - Price performance (25 points)
+  - Image quality (25 points)
+- **Top scorers ranking** with beautiful visual display
+- **Risk & opportunity assessment** for each token
+- **Contract address copying** for easy trading
+
+### 🎯 Investment Intelligence
+- **Smart filtering** by score, risk, opportunity, and more
+- **Grid & list views** for different analysis perspectives
+- **Multi-page fetching** (up to 2,500 tokens)
+- **Time-based filtering** (3-24 hours since launch)
+- **Professional image analysis** and quality scoring
+
+### 🚀 Advanced Functionality
+- **Sorting options**: Score, risk, liquidity, volume, age, image quality
+- **Quick filters**: Top scorers (80+), Good (60+), High opportunity, Low risk
+- **Copy functionality**: One-click contract address copying
+- **Debug logging**: Comprehensive console output for troubleshooting
+
+## 📱 Usage
+
+### GeckoTerminal Dashboard
+- **Fetch Latest Pools**: Gets up to 2,500 recent Solana pools
+- **Test API Connection**: Verifies GeckoTerminal API connectivity
+- **Sort & Filter**: Use dropdown and buttons to find best opportunities
+- **Copy Addresses**: Click copy buttons for easy trading
+
+### Classic CoinGecko Dashboard
+- **🆕 Get New Solana Tokens**: Fetches small market cap Solana tokens
+- **🪙 Recent Tokens**: Gets recently launched tokens
+- **🗑️ Clear All**: Clears current data
+- **🔍 Test Connection**: Tests API connectivity
+
+### Data Display
+- **Token Cards**: Individual token information with metrics
+- **Statistics Overview**: Total market cap, volume, token count, average age
+- **Age Distribution Chart**: Visual representation of token ages
+- **Filtering Options**: Search by name/symbol, filter by market cap and price change
+
+### Real-time Features
+- **Live API calls** to GeckoTerminal and CoinGecko
+- **Status indicators** showing operation progress
+- **Error handling** with helpful messages
+- **Console logging** for transparency
+
+## 🔧 Configuration
+
+### API Settings
+The dashboard uses CoinGecko API by default. You can modify the API endpoints in the JavaScript code:
+
+```javascript
+const COINGECKO_API = 'https://api.coingecko.com/api/v3';
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Data Sources  │    │  Feature Store  │    │   ML Models     │
-│                 │    │                 │    │                 │
-│ • Solana RPC    │───▶│ • Chain Flow    │───▶│ • GLMs          │
-│ • Pump.fun API  │    │ • Wallet Quality│    │ • XGBoost       │
-│ • Social Media  │    │ • Social        │    │ • LightGBM      │
-│ • Content       │    │ • Content       │    │ • CatBoost      │
-│ • Images        │    │ • Image         │    │ • Ensemble      │
-└─────────────────┘    │ • Regime        │    └─────────────────┘
-                       └─────────────────┘              │
-                                │                       │
-                       ┌─────────────────┐              │
-                       │   Evaluation    │              │
-                       │                 │              │
-                       │ • Metrics       │◀─────────────┘
-                       │ • Cross-Validation│
-                       │ • Hyperparameter │
-                       │   Tuning        │
-                       └─────────────────┘
-                                │
-                       ┌─────────────────┐
-                       │   API Server    │
-                       │                 │
-                       │ • FastAPI       │
-                       │ • Real-time     │
-                       │   Predictions   │
-                       └─────────────────┘
-```
 
-## 🚀 Quick Start
+### Filtering Options
+Adjust the filtering criteria in the `fetchRealNewPools()` function:
 
-### 1. Installation
+```javascript
+// Market cap threshold (currently $100M)
+return token.market_cap < 100000000;
 
-```bash
-# Clone the repository
-git clone <repository-url>
-cd Pumpfun
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install the package in development mode
-pip install -e .
-```
-
-### 2. Configuration
-
-The system uses a comprehensive configuration system. Create a custom config file or use the defaults:
-
-```python
-from pumpfun.config import config
-
-# View current configuration
-print(config.dict())
-```
-
-### 3. Test the System
-
-```bash
-# Run comprehensive system tests
-python test_system.py
-```
-
-### 4. Use the CLI
-
-```bash
-# View available commands
-pumpfun --help
-
-# Fetch data from a source
-pumpfun data fetch --source solana --limit 1000
-
-# Engineer features
-pumpfun features engineer --source solana --output features.csv
-
-# Train a model
-pumpfun models train --model xgboost --source solana --target return_24h
-
-# Start the API server
-pumpfun serve start --host 0.0.0.0 --port 8000
+// Volume threshold (currently $1K)
+return token.total_volume > 1000;
 ```
 
 ## 📊 Data Sources
 
-### Solana Blockchain
-- Transaction data and flow analysis
-- Wallet behavior patterns
-- Liquidity and volume metrics
+### Primary API
+- **CoinGecko API**: Cryptocurrency market data
+- **Endpoint**: `/coins/markets` with Solana platform filter
+- **Data**: Market cap, price, volume, supply, creation dates
 
-### Pump.fun API
-- Token metadata and creation info
-- Historical price and volume data
-- Social engagement metrics
+### Data Processing
+- **Filtering**: Small market cap, active volume
+- **Sorting**: By market cap (ascending for newer tokens)
+- **Limiting**: Top 10 results for performance
 
-### Social Media
-- Twitter mentions and sentiment
-- Community engagement analysis
-- Influencer activity tracking
+## 🎯 Use Cases
 
-### Content Analysis
-- Token description analysis
-- Readability and complexity scoring
-- Keyphrase extraction
+### For Traders
+- **Discover new tokens** before they gain mainstream attention
+- **Monitor small cap opportunities** in the Solana ecosystem
+- **Track token performance** with real-time data
 
-### Image Analysis
-- Token logo quality assessment
-- Visual appeal scoring
-- Brand safety evaluation
+### For Researchers
+- **Analyze token creation patterns** and trends
+- **Study market dynamics** of new launches
+- **Research Solana ecosystem growth**
 
-## ⚙️ Feature Engineering
+### For Developers
+- **Learn from existing implementations** of token dashboards
+- **Understand API integration** with cryptocurrency data
+- **Build upon the foundation** for custom solutions
 
-The system generates 6 feature families with 100+ engineered features:
+## 🚨 Limitations
 
-### 1. Chain Flow Features
-- Transaction counts and rates
-- Buy/sell volume analysis
-- Holder concentration metrics
-- Flow imbalance indicators
+### API Constraints
+- **Rate limiting**: CoinGecko has API call limits
+- **Data availability**: Not all tokens have complete information
+- **Update frequency**: Data may not be real-time
 
-### 2. Wallet Quality Features
-- Wallet age and reputation
-- Transaction patterns
-- Bot detection scores
-- Risk assessment metrics
+### Token Coverage
+- **Solana platform only**: Focuses on Solana ecosystem
+- **Market cap filtering**: May miss some legitimate new tokens
+- **Volume requirements**: Excludes inactive tokens
 
-### 3. Social Features
-- Multi-platform mention analysis
-- Sentiment scoring
-- Engagement metrics
-- Credibility weighting
+## 🔮 Future Enhancements
 
-### 4. Content Features
-- Text quality analysis
-- Readability scoring
-- Keyphrase extraction
-- Sentiment analysis
+### Planned Features
+- **Multiple blockchain support** (Ethereum, Polygon, etc.)
+- **Advanced filtering options** (launch date, token type)
+- **Portfolio tracking** for discovered tokens
+- **Price alerts** and notifications
 
-### 5. Image Features
-- Visual quality assessment
-- Brand safety scoring
-- Aesthetic appeal metrics
-- Object detection analysis
-
-### 6. Regime Features
-- Market volatility regimes
-- Volume regime classification
-- Trend strength indicators
-- Regime transition probabilities
-
-## 🤖 Machine Learning Models
-
-### Model Types
-- **GLMs**: Logistic regression, Ridge regression
-- **Gradient Boosting**: XGBoost, LightGBM, CatBoost
-- **Ensemble Methods**: Weighted averaging, stacking
-
-### Training Features
-- Time series cross-validation
-- Hyperparameter optimization
-- Feature importance analysis
-- Model calibration
-
-### Evaluation Metrics
-- **Regression**: RMSE, MAE, R², MAPE
-- **Classification**: Precision, Recall, F1, AUC
-- **Additional**: Feature importance, prediction bias, residuals
-
-## 🌐 API Server
-
-### Endpoints
-- `GET /` - Service information
-- `GET /health` - Health check
-- `POST /rank` - Token ranking predictions
-- `GET /models` - Available models
-- `POST /models/reload` - Reload models
-- `GET /features/{token}` - Token features
-- `GET /metrics` - Service metrics
-
-### Example Usage
-
-```python
-import requests
-
-# Rank tokens
-response = requests.post("http://localhost:8000/rank", json={
-    "token_addresses": ["token1", "token2", "token3"],
-    "include_features": True,
-    "include_confidence": True
-})
-
-rankings = response.json()
-for ranking in rankings:
-    print(f"{ranking['token_address']}: {ranking['ranking_score']}")
-```
-
-## 📁 Project Structure
-
-```
-Pumpfun/
-├── pumpfun/                    # Main package
-│   ├── __init__.py            # Package initialization
-│   ├── cli.py                 # Command-line interface
-│   ├── config.py              # Configuration management
-│   ├── models.py              # ML models and registry
-│   ├── evaluation.py          # Model evaluation
-│   ├── labels.py              # Label generation
-│   ├── serve.py               # API server
-│   ├── data/                  # Data handling
-│   │   ├── connector.py       # Data source connectors
-│   │   ├── storage.py         # Data storage
-│   │   └── snapshotter.py     # Data snapshotting
-│   └── features/              # Feature engineering
-│       ├── engineers.py       # Feature engineers
-│       └── store.py           # Feature storage
-├── pyproject.toml             # Project configuration
-├── requirements.txt            # Dependencies
-├── train.py                   # Training script
-├── test_system.py             # System tests
-└── README.md                  # This file
-```
-
-## 🔧 Configuration
-
-The system is highly configurable through the `config.py` file:
-
-```python
-# Data configuration
-config.data.data_dir = "data"
-config.data.snapshot_interval_minutes = 60
-config.data.max_snapshot_age_hours = 168
-
-# Feature configuration
-config.feature.feature_families = [
-    "chain_flow", "wallet_quality", "social", 
-    "content", "image", "regime"
-]
-
-# Model configuration
-config.model.model_types = ["glm", "xgboost", "lightgbm", "catboost"]
-config.model.ensemble_methods = ["weighted_average", "stacking"]
-```
-
-## 🧪 Testing
-
-Run the comprehensive test suite:
-
-```bash
-# Run all tests
-python test_system.py
-
-# Test specific components
-python -m pytest tests/
-```
-
-## 🚀 Deployment
-
-### Local Development
-```bash
-# Start API server
-pumpfun serve start --reload
-
-# Run training
-python train.py --model xgboost --data solana
-```
-
-### Production
-```bash
-# Start production server
-pumpfun serve start --host 0.0.0.0 --port 8000 --workers 4
-
-# Use systemd service
-sudo systemctl start pumpfun-ranking
-```
-
-## 📈 Performance
-
-The system is designed for high performance:
-
-- **Feature Computation**: 1000+ tokens/second
-- **Model Prediction**: 100+ predictions/second
-- **API Response**: <100ms average latency
-- **Data Processing**: Real-time streaming support
+### Technical Improvements
+- **WebSocket integration** for real-time updates
+- **Caching system** to reduce API calls
+- **Progressive Web App** capabilities
+- **Mobile app** versions
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+We welcome contributions! Here's how you can help:
+
+### Development
+1. **Fork the repository**
+2. **Create a feature branch** (`git checkout -b feature/amazing-feature`)
+3. **Commit your changes** (`git commit -m 'Add amazing feature'`)
+4. **Push to the branch** (`git push origin feature/amazing-feature`)
+5. **Open a Pull Request**
+
+### Bug Reports
+- **Use GitHub Issues** to report bugs
+- **Include detailed descriptions** of the problem
+- **Provide steps to reproduce** the issue
+- **Share console logs** if available
+
+### Feature Requests
+- **Describe the feature** you'd like to see
+- **Explain the use case** and benefits
+- **Consider implementation complexity**
+- **Be specific** about requirements
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support
+## 🙏 Acknowledgments
 
-- **Documentation**: Check this README and inline code comments
-- **Issues**: Report bugs and feature requests via GitHub issues
-- **Discussions**: Join community discussions on GitHub
+- **CoinGecko** for providing the cryptocurrency API
+- **Chart.js** for the excellent charting library
+- **Solana community** for building an amazing ecosystem
+- **Open source contributors** who made this possible
 
-## 🔮 Roadmap
+## 📞 Support
 
-- [ ] Real-time streaming data ingestion
-- [ ] Advanced ensemble methods
-- [ ] Automated model retraining
-- [ ] Web dashboard
-- [ ] Mobile app support
-- [ ] Multi-chain support
-- [ ] Advanced NLP features
-- [ ] GPU acceleration
+### Getting Help
+- **GitHub Issues**: For bugs and feature requests
+- **Discussions**: For questions and community support
+- **Wiki**: For detailed documentation and guides
+
+### Community
+- **Discord**: Join our community server
+- **Twitter**: Follow for updates and announcements
+- **Telegram**: Get instant notifications
 
 ---
 
-**Built with ❤️ for the Pump.fun community**
+**Made with ❤️ for the Solana community**
+
+*Version 1.0 - Stable Release*
