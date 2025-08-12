@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Working Pump.fun Dashboard - Fixed</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: white;
+            color: #333;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .btn {
+            padding: 12px 24px;
+            margin: 10px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .status {
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        
+        #tokensList {
+            margin-top: 20px;
+        }
+        .token-item {
+            padding: 15px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #f9f9f9;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .token-header {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .token-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .detail-item {
+            padding: 8px;
+            background: white;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+        }
+        .detail-label {
+            font-weight: bold;
+            color: #666;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        .detail-value {
+            color: #333;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+        .time-filter-info {
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #c3e6cb;
+        }
+        .filter-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            background: #28a745;
+            color: white;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .filter-description {
+            color: #155724;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Working Pump.fun Dashboard - Fixed</h1>
+        <p>Enhanced dashboard with fixes for finding more tokens and proper contract addresses</p>
+        
+        <div class="time-filter-info">
+            <span class="filter-badge" id="timeBadge">Ready</span>
+            <span class="filter-description" id="timeDescription">Click "Fetch Latest Pools" to start</span>
+        </div>
+        
+        <button class="btn" onclick="testAPI()">Test API Connection</button>
+        <button class="btn" onclick="fetchLatestPools()">Fetch Latest Pools</button>
+        <button class="btn" onclick="clearData()">Clear Data</button>
+        
+        <div id="status"></div>
+        <div id="tokensList"></div>
+    </div>
+
+    <script>
+        const GECKOTERMINAL_API = 'https://api.geckoterminal.com/api/v2';
+        let allTokens = [];
+        
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = '<div class="status ' + type + '">' + message + '</div>';
+            console.log(type.toUpperCase() + ': ' + message);
+        }
+        
+        function updateTimeFilterDisplay(timeRange, tokenCount) {
+            const badge = document.getElementById('timeBadge');
+            const description = document.getElementById('timeDescription');
+            
+            if (timeRange.includes('6 hours')) {
+                badge.style.background = '#28a745';
+                badge.textContent = '6 Hours';
+            } else if (timeRange.includes('12 hours')) {
+                badge.style.background = '#ffc107';
+                badge.textContent = '12 Hours';
+            } else if (timeRange.includes('24 hours')) {
+                badge.style.background = '#dc3545';
+                badge.textContent = '24 Hours';
+            }
+            
+            description.textContent = 'Found ' + tokenCount + ' tokens from ' + timeRange;
+        }
+        
+        function extractTokenAddress(baseToken, pool) {
+            // Try multiple possible locations for the contract address
+            const possibleAddresses = [
+                baseToken.attributes?.address,
+                baseToken.attributes?.contract_address,
+                baseToken.attributes?.token_address,
+                baseToken.id,
+                pool.attributes?.base_token_address,
+                pool.attributes?.token_address,
+                pool.relationships?.base_token?.data?.id
+            ];
+            
+            // Find the first valid address
+            for (const addr of possibleAddresses) {
+                if (addr && typeof addr === 'string' && addr.length >= 16) {
+                    console.log('Found contract address: ' + addr + ' for token ' + (baseToken.attributes?.name || 'Unknown'));
+                    return addr;
+                }
+            }
+            
+            console.warn('No valid contract address found for token ' + (baseToken.attributes?.name || 'Unknown'));
+            console.log('Available address fields:', possibleAddresses);
+            return null;
+        }
+        
+        async function testAPI() {
+            showStatus('Testing GeckoTerminal API connection...', 'info');
+            
+            try {
+                const response = await fetch(GECKOTERMINAL_API + '/networks/solana/pools?limit=1');
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('API Response:', data);
+                    showStatus('✅ API connection successful! Response received.', 'success');
+                } else {
+                    showStatus('⚠️ API responded with status: ' + response.status, 'error');
+                }
+            } catch (error) {
+                console.error('API test failed:', error);
+                showStatus('❌ Connection failed: ' + error.message, 'error');
+            }
+        }
+        
+        async function fetchLatestPools() {
+            showStatus('🌐 Fetching latest Solana pools from GeckoTerminal API...', 'info');
+            
+            try {
+                // Get more pools to filter for recent ones
+                const apiUrl = GECKOTERMINAL_API + '/networks/solana/pools?include=base_token,quote_token,dex&page=1&limit=200';
+                
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (compatible; PumpFunDashboard/1.0)'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('API error: ' + response.status);
+                }
+                
+                const data = await response.json();
+                console.log('API Response received:', data);
+                
+                if (!data || !data.data || data.data.length === 0) {
+                    throw new Error('API returned no pools data');
+                }
+                
+                showStatus('📊 Processing ' + data.data.length + ' latest pools...', 'info');
+                
+                // Parse the API data
+                const tokens = parseApiData(data);
+                
+                if (tokens.length === 0) {
+                    throw new Error('Failed to parse API data into tokens');
+                }
+                
+                // Filter for tokens created in the last 6 hours (more flexible)
+                const sixHoursAgo = new Date(Date.now() - (6 * 60 * 60 * 1000));
+                console.log('Filtering for tokens created after:', sixHoursAgo.toISOString());
+                
+                const recentTokens = tokens.filter(token => {
+                    if (!token.creation_date || token.creation_date === 'Unknown') {
+                        console.log('Skipping ' + token.name + ': No creation date');
+                        return false;
+                    }
+                    try {
+                        const creationDate = new Date(token.creation_date);
+                        const isRecent = creationDate >= sixHoursAgo;
+                        console.log(token.name + ': Created ' + creationDate.toISOString() + ' - Recent: ' + isRecent);
+                        return isRecent;
+                    } catch (e) {
+                        console.log('Error parsing date for ' + token.name + ':', e);
+                        return false;
+                    }
+                });
+                
+                console.log('Found ' + recentTokens.length + ' tokens in last 6 hours out of ' + tokens.length + ' total');
+                
+                let finalTokens = recentTokens;
+                let timeRange = 'last 6 hours';
+                
+                if (recentTokens.length < 5) {
+                    showStatus('⚠️ Only found a few recent tokens. Expanding search to last 12 hours...', 'warning');
+                    
+                    // Expand to 12 hours
+                    const twelveHoursAgo = new Date(Date.now() - (12 * 60 * 60 * 1000));
+                    const twelveHourTokens = tokens.filter(token => {
+                        if (!token.creation_date || token.creation_date === 'Unknown') return false;
+                        try {
+                            const creationDate = new Date(token.creation_date);
+                            return creationDate >= twelveHoursAgo;
+                        } catch (e) {
+                            return false;
+                        }
+                    });
+                    
+                    if (twelveHourTokens.length >= 5) {
+                        showStatus('📊 Found ' + twelveHourTokens.length + ' tokens from last 12 hours.', 'info');
+                        finalTokens = twelveHourTokens;
+                        timeRange = 'last 12 hours';
+                    } else {
+                        // Last resort: show tokens from last 24 hours
+                        const oneDayAgo = new Date(Date.now() - (24 * 60 * 60 * 1000));
+                        const dayOldTokens = tokens.filter(token => {
+                            if (!token.creation_date || token.creation_date === 'Unknown') return false;
+                            try {
+                                const creationDate = new Date(token.creation_date);
+                                return creationDate >= oneDayAgo;
+                            } catch (e) {
+                                return false;
+                            }
+                        });
+                        
+                        if (dayOldTokens.length === 0) {
+                            throw new Error('No recent tokens found. API might be returning old data.');
+                        }
+                        
+                        showStatus('📊 Found ' + dayOldTokens.length + ' tokens from last 24 hours.', 'info');
+                        finalTokens = dayOldTokens;
+                        timeRange = 'last 24 hours';
+                    }
+                } else {
+                    showStatus('🎯 Found ' + recentTokens.length + ' tokens created in the last 6 hours!', 'success');
+                }
+                
+                // Success! We have comprehensive data
+                allTokens = finalTokens;
+                console.log('Latest tokens found:', allTokens);
+                displayTokens();
+                
+                showStatus('✅ SUCCESS! Fetched ' + allTokens.length + ' pools from ' + timeRange + '!', 'success');
+                updateTimeFilterDisplay(timeRange, allTokens.length);
+                
+            } catch (error) {
+                console.error('Latest data fetch failed:', error);
+                showStatus('❌ Failed to fetch latest data: ' + error.message, 'error');
+                
+                const container = document.getElementById('tokensList');
+                container.innerHTML = '<div class="token-item"><h3>❌ Latest Data Fetch Failed</h3><p><strong>Error:</strong> ' + error.message + '</p><p>This is needed for the scoring model to identify best recent launches.</p><p><strong>Troubleshooting:</strong></p><ul><li>Check your internet connection</li><li>GeckoTerminal API might be temporarily down</li><li>Try refreshing the page and clicking again</li></ul></div>';
+            }
+        }
+        
+        function parseApiData(apiData) {
+            const tokens = [];
+            
+            try {
+                console.log('Raw API data received:', apiData);
+                
+                if (!apiData || !apiData.data) {
+                    console.error('Invalid API data structure:', apiData);
+                    return tokens;
+                }
+                
+                if (apiData.data.length === 0) {
+                    console.log('API returned no pools data');
+                    return tokens;
+                }
+                
+                const pools = apiData.data;
+                console.log('Processing API data for', pools.length, 'pools');
+                
+                // Build lookup tables for included resources
+                const included = {};
+                if (apiData.included && Array.isArray(apiData.included)) {
+                    apiData.included.forEach(item => {
+                        included[item.id] = item;
+                    });
+                    console.log('Built included lookup table with', Object.keys(included).length, 'items');
+                } else {
+                    console.log('No included resources found in API response');
+                }
+                
+                pools.forEach((pool, index) => {
+                    try {
+                        const attributes = pool.attributes || {};
+                        const relationships = pool.relationships || {};
+                        
+                        console.log('Processing pool ' + (index + 1) + ':', pool.id);
+                        
+                        // Get base token info
+                        let baseToken = {};
+                        let quoteToken = {};
+                        let dexInfo = {};
+                        
+                        if (relationships.base_token && relationships.base_token.data) {
+                            const baseId = relationships.base_token.data.id;
+                            baseToken = included[baseId] || {};
+                            console.log('Base token found: ' + (baseToken.attributes?.name || 'Unknown'));
+                        }
+                        
+                        if (relationships.quote_token && relationships.quote_token.data) {
+                            const quoteId = relationships.quote_token.data.id;
+                            quoteToken = included[quoteId] || {};
+                        }
+                        
+                        if (relationships.dex && relationships.dex.data) {
+                            const dexId = relationships.dex.data.id;
+                            dexInfo = included[dexId] || {};
+                        }
+                        
+                        // Extract comprehensive metrics
+                        const token = {
+                            id: pool.id,
+                            name: baseToken.attributes?.name || 'Unknown Token',
+                            symbol: baseToken.attributes?.symbol || 'UNKNOWN',
+                            contract_address: extractTokenAddress(baseToken, pool) || 'N/A',
+                            creation_date: attributes.pool_created_at || 'Unknown',
+                            current_price: parseFloat(attributes.base_token_price_usd) || 0,
+                            volume_24h: parseFloat(attributes.volume_usd?.h24) || 0,
+                            liquidity: parseFloat(attributes.reserve_in_usd) || 0,
+                            market_cap: parseFloat(attributes.fdv_usd) || 0,
+                            source: 'GeckoTerminal API',
+                            dex: dexInfo.attributes?.name || 'Unknown',
+                            quote_token: quoteToken.attributes?.symbol || 'SOL',
+                            image: baseToken.attributes?.image_url || null
+                        };
+                        
+                        tokens.push(token);
+                        console.log('Successfully processed token: ' + token.name + ' (' + token.symbol + ')');
+                        
+                    } catch (poolError) {
+                        console.error('Error processing pool ' + (index + 1) + ':', poolError);
+                    }
+                });
+                
+                console.log('Successfully parsed ' + tokens.length + ' tokens from ' + pools.length + ' pools');
+                
+            } catch (error) {
+                console.error('API data parsing failed:', error);
+            }
+            
+            return tokens;
+        }
+        
+        function displayTokens() {
+            const container = document.getElementById('tokensList');
+            
+            if (allTokens.length === 0) {
+                container.innerHTML = '<div class="token-item"><p>No tokens found.</p></div>';
+                return;
+            }
+            
+            let html = '<h2>📊 Found ' + allTokens.length + ' Tokens</h2>';
+            
+            allTokens.forEach((token, index) => {
+                const creationDate = token.creation_date !== 'Unknown' ? new Date(token.creation_date).toLocaleString() : 'Unknown';
+                const hoursAgo = token.creation_date !== 'Unknown' ? Math.round((Date.now() - new Date(token.creation_date)) / (1000 * 60 * 60)) : 'Unknown';
+                
+                html += '<div class="token-item">';
+                html += '<div class="token-header">' + (index + 1) + '. ' + token.name + ' (' + token.symbol + ')</div>';
+                html += '<div class="token-details">';
+                html += '<div class="detail-item"><div class="detail-label">Contract Address</div><div class="detail-value">' + token.contract_address + '</div></div>';
+                html += '<div class="detail-item"><div class="detail-label">Creation Date</div><div class="detail-value">' + creationDate + '</div></div>';
+                html += '<div class="detail-item"><div class="detail-label">Age</div><div class="detail-value">' + hoursAgo + ' hours ago</div></div>';
+                html += '<div class="detail-item"><div class="detail-label">Current Price</div><div class="detail-value">$' + token.current_price.toFixed(6) + '</div></div>';
+                html += '<div class="detail-item"><div class="detail-label">24h Volume</div><div class="detail-value">$' + token.volume_24h.toLocaleString() + '</div></div>';
+                html += '<div class="detail-item"><div class="detail-label">Liquidity</div><div class="detail-value">$' + token.liquidity.toLocaleString() + '</div></div>';
+                html += '<div class="detail-item"><div class="detail-label">Market Cap</div><div class="detail-value">$' + token.market_cap.toLocaleString() + '</div></div>';
+                html += '<div class="detail-item"><div class="detail-label">DEX</div><div class="detail-value">' + token.dex + '</div></div>';
+                html += '<div class="detail-item"><div class="detail-label">Quote Token</div><div class="detail-value">' + token.quote_token + '</div></div>';
+                html += '</div>';
+                html += '</div>';
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function clearData() {
+            allTokens = [];
+            document.getElementById('tokensList').innerHTML = '';
+            document.getElementById('status').innerHTML = '';
+            document.getElementById('timeBadge').textContent = 'Ready';
+            document.getElementById('timeDescription').textContent = 'Click "Fetch Latest Pools" to start';
+            document.getElementById('timeBadge').style.background = '#6c757d';
+        }
+    </script>
+</body>
+</html>
